@@ -41,7 +41,7 @@ cdef class CANParser:
 
     # dp - disable checks
     # checks = []
-    enforce_checks = False
+    # enforce_checks = False
 
     self.vl = {}
     self.vl_all = {}
