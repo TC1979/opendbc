@@ -40,7 +40,7 @@ cdef class CANParser:
       raise RuntimeError(f"Can't find DBC: {dbc_name}")
 
     # dp - disable checks
-    checks = []
+    # checks = []
     enforce_checks = False
 
     self.vl = {}
