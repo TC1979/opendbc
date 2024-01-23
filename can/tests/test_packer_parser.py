@@ -370,7 +370,7 @@ class TestCanParserPacker(unittest.TestCase):
       "ITS_CONNECT_LEAD": 0,
       "ACCEL_CMD_ALT": 0,
       "CHECKSUM": 0,
-      "LEAD_STANDSTILL": 0,
+      "LEAD_VEHICLE_STOPPED": 0,
     })
 
   def test_disallow_duplicate_messages(self):
