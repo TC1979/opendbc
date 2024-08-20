@@ -3,11 +3,14 @@ import os
 import numpy as np
 import tomllib
 from abc import abstractmethod, ABC
+from difflib import SequenceMatcher
+from json import load
 from enum import StrEnum
 from typing import Any, NamedTuple
 from collections.abc import Callable
 from functools import cache
 
+from openpilot.common.params import Params
 from opendbc.car import DT_CTRL, apply_hysteresis, gen_empty_fingerprint, scale_rot_inertia, scale_tire_stiffness, get_friction, STD_CARGO_KG
 from opendbc.car import structs
 from opendbc.car.can_definitions import CanData, CanRecvCallable, CanSendCallable
@@ -28,6 +31,7 @@ FRICTION_THRESHOLD = 0.3
 TORQUE_PARAMS_PATH = os.path.join(BASEDIR, 'torque_data/params.toml')
 TORQUE_OVERRIDE_PATH = os.path.join(BASEDIR, 'torque_data/override.toml')
 TORQUE_SUBSTITUTE_PATH = os.path.join(BASEDIR, 'torque_data/substitute.toml')
+TORQUE_NN_MODEL_PATH = os.path.join(BASEDIR, 'torque_data/lat_models')
 
 GEAR_SHIFTER_MAP: dict[str, GearShifter] = {
   'P': GearShifter.park, 'PARK': GearShifter.park,
@@ -51,6 +55,9 @@ class LatControlInputs(NamedTuple):
 
 TorqueFromLateralAccelCallbackType = Callable[[LatControlInputs, structs.CarParams.LateralTorqueTuning, float, float, bool, bool], float]
 
+
+def similarity(s1:str, s2:str) -> float:
+  return SequenceMatcher(None, s1, s2).ratio()
 
 @cache
 def get_torque_params():
