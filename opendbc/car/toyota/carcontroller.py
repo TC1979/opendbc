@@ -10,7 +10,7 @@ from opendbc.car.toyota.values import CAR, STATIC_DSU_MSGS, NO_STOP_TIMER_CAR, T
                                         UNSUPPORTED_DSU_CAR
 from opendbc.can.packer import CANPacker
 from openpilot.common.params import Params
-from opendbc.car.common.conversions import Conversions as 
+from opendbc.car.common.conversions import Conversions as CV
 
 LongCtrlState = structs.CarControl.Actuators.LongControlState
 SteerControlType = structs.CarParams.SteerControlType
