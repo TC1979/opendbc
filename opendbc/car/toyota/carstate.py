@@ -257,7 +257,7 @@ class CarState(CarStateBase):
       if not self.distance_button_hold:
         self.gap_button_counter += 1
         if self.gap_button_counter > 150:
-          self.params.put_bool_nonblocking('ExperimentalMode', not self.params.get_bool("ExperimentalMode"))  # change experimental/chill mode on fly with long press
+          self.params.put_bool_nonblocking('ExperimentalMode', not self.params.get_bool("ExperimentalMode"))
           self.gap_button_counter = 0
 
     if not self.distance_button and self.ispressed_prev and self.short_press_button_counter < 50:
@@ -293,7 +293,7 @@ class CarState(CarStateBase):
 
     # DP: Enable blindspot debug mode once (@arne182)
     # let's keep all the commented out code for easy debug purpose for future.
-    if self.toyota_bsm and self.frame > 199: #self.CP.carFingerprint == CAR.PRIUS_TSS2: #not (self.CP.carFingerprint in TSS2_CAR or self.CP.carFingerprint == CAR.CAMRY or self.CP.carFingerprint == CAR.CAMRYH):
+    if self.toyota_bsm and self.frame > 199:
       distance_1 = cp.vl["DEBUG"].get('BLINDSPOTD1')
       distance_2 = cp.vl["DEBUG"].get('BLINDSPOTD2')
       side = cp.vl["DEBUG"].get('BLINDSPOTSIDE')
