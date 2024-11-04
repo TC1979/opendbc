@@ -235,6 +235,10 @@ struct CarState {
   # process meta
   cumLagMs @50 :Float32;
 
+  # TOP
+  brakeLights @57 :Bool;
+  steeringWheelCar @58 :Bool;
+
   struct WheelSpeeds {
     # optional wheel speeds
     fl @0 :Float32;
@@ -487,6 +491,10 @@ struct CarParams {
     torque @67 :LateralTorqueTuning;
   }
 
+  # TOP
+  experimentalModeViaWheel @77 :Bool;
+  twilsoncoNNFF @78 :Bool;
+
   steerLimitAlert @28 :Bool;
   steerLimitTimer @47 :Float32;  # time before steerLimitAlert is issued
 
@@ -546,6 +554,10 @@ struct CarParams {
     steeringAngleDeadzoneDeg @5 :Float32;
     latAccelFactor @6 :Float32;
     latAccelOffset @7 :Float32;
+
+    #TOP
+    nnModelName @8 :Text;
+    nnModelFuzzyMatch @9 :Bool;
   }
 
   struct LongitudinalPIDTuning {
@@ -554,8 +566,10 @@ struct CarParams {
     kiBP @2 :List(Float32);
     kiV @3 :List(Float32);
     kf @6 :Float32;
-    deadzoneBPDEPRECATED @4 :List(Float32);
-    deadzoneVDEPRECATED @5 :List(Float32);
+
+    #TOP
+    deadzoneBP @4 :List(Float32);
+    deadzoneV @5 :List(Float32);
   }
 
   struct LateralINDITuning {
