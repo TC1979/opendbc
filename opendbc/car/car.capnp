@@ -115,6 +115,10 @@ struct OnroadEventDEPRECATED @0x9b1657f34caf3ad3 {
     espActive @121;
     personalityChanged @122;
     aeb @123;
+    atlEngageSound @126;
+    atlDisengageSound @127;
+    torqueNNLoad @128;
+    automaticBrakehold @129;
 
     radarCanErrorDEPRECATED @15;
     communityFeatureDisallowedDEPRECATED @62;
@@ -186,6 +190,7 @@ struct CarState {
   regenBraking @45 :Bool; # this is user pedal only
   parkingBrake @39 :Bool;
   brakeHoldActive @38 :Bool;
+  brakeLights @19 :Bool;
 
   # steering wheel
   steeringAngleDeg @7 :Float32;
@@ -236,8 +241,13 @@ struct CarState {
   cumLagMs @50 :Float32;
 
   # TOP
-  brakeLights @57 :Bool;
-  steeringWheelCar @58 :Bool;
+  steeringWheelCar @57 :Bool;
+  rightBlindspotD1 @58 :Float32;
+  rightBlindspotD2 @59 :Float32;
+  leftBlindspotD1 @60 :Float32;
+  leftBlindspotD2 @61 :Float32;
+  blindspotside @62 :Float32;
+  distanceLines @63 :UInt8; # KRKeegan toyota distance lines
 
   struct WheelSpeeds {
     # optional wheel speeds
@@ -293,7 +303,6 @@ struct CarState {
 
   # deprecated
   errorsDEPRECATED @0 :List(OnroadEventDEPRECATED.EventName);
-  brakeLightsDEPRECATED @19 :Bool;
   steeringRateLimitedDEPRECATED @29 :Bool;
   canMonoTimesDEPRECATED @12: List(UInt64);
   canRcvTimeoutDEPRECATED @49 :Bool;
@@ -426,6 +435,9 @@ struct CarControl {
       prompt @6;
       promptRepeat @7;
       promptDistracted @8;
+
+      # AleSato's automatic brakehold
+      engageBrakehold @9;
     }
   }
 
@@ -491,10 +503,6 @@ struct CarParams {
     torque @67 :LateralTorqueTuning;
   }
 
-  # TOP
-  experimentalModeViaWheel @77 :Bool;
-  twilsoncoNNFF @78 :Bool;
-
   steerLimitAlert @28 :Bool;
   steerLimitTimer @47 :Float32;  # time before steerLimitAlert is issued
 
@@ -524,6 +532,10 @@ struct CarParams {
 
   secOcRequired @75 :Bool;  # Car requires SecOC message authentication to operate
   secOcKeyAvailable @76 :Bool;  # Stored SecOC key loaded from params
+
+  # TOP
+  experimentalModeViaWheel @77 :Bool;
+  twilsoncoNNFF @78 :Bool;
 
   struct SafetyConfig {
     safetyModel @0 :SafetyModel;
