@@ -1,8 +1,9 @@
-import copy
 import math
-from opendbc.car import apply_meas_steer_torque_limits, apply_std_steer_angle_limits, common_fault_avoidance, make_tester_present_msg, rate_limit, structs
+from opendbc.car import carlog, apply_meas_steer_torque_limits, apply_std_steer_angle_limits, common_fault_avoidance, \
+                        make_tester_present_msg, rate_limit, structs, ACCELERATION_DUE_TO_GRAVITY
 from opendbc.car.can_definitions import CanData
 from opendbc.car.common.numpy_fast import clip, interp
+from opendbc.car.secoc import add_mac, build_sync_mac
 from opendbc.car.interfaces import CarControllerBase
 from opendbc.car.toyota import toyotacan
 from opendbc.car.toyota.values import CAR, STATIC_DSU_MSGS, NO_STOP_TIMER_CAR, TSS2_CAR, \
@@ -15,8 +16,6 @@ from opendbc.car.common.conversions import Conversions as CV
 LongCtrlState = structs.CarControl.Actuators.LongControlState
 SteerControlType = structs.CarParams.SteerControlType
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
-
-ACCELERATION_DUE_TO_GRAVITY = 9.81  # m/s^2
 
 ACCEL_WINDUP_LIMIT = 0.5  # m/s^2 / frame
 
@@ -77,13 +76,17 @@ class CarController(CarControllerBase):
     self.packer = CANPacker(dbc_name)
     self.accel = 0
 
+    self.secoc_lka_message_counter = 0
+    self.secoc_lta_message_counter = 0
+    self.secoc_prev_reset_counter = 0
+    self.secoc_mismatch_counter = 0
+
     self.toyotaautolock = Params().get_bool("toyotaautolock")
     self.toyotaautounlock = Params().get_bool("toyotaautounlock")
     self.last_gear = GearShifter.park
     self.lock_once = False
     self._reverse_acc_change = Params().get_bool("ReverseAccChange")
     self.topsng = Params().get_bool("topsng")
-
     self.toyota_bsm = Params().get_bool("toyota_bsm")
     self.blindspot_debug_enabled_left = False
     self.blindspot_debug_enabled_right = False
@@ -154,6 +157,18 @@ class CarController(CarControllerBase):
             # print(self.blindspot_frame)
             # print("bsm poll right")
 
+    # *** handle secoc reset counter increase ***
+    if self.CP.flags & ToyotaFlags.SECOC.value:
+      if CS.secoc_synchronization['RESET_CNT'] != self.secoc_prev_reset_counter:
+        self.secoc_lka_message_counter = 0
+        self.secoc_lta_message_counter = 0
+        self.secoc_prev_reset_counter = CS.secoc_synchronization['RESET_CNT']
+
+        expected_mac = build_sync_mac(self.secoc_key, int(CS.secoc_synchronization['TRIP_CNT']), int(CS.secoc_synchronization['RESET_CNT']))
+        if int(CS.secoc_synchronization['AUTHENTICATOR']) != expected_mac and self.secoc_mismatch_counter < 100:
+          carlog.error("SecOC synchronization MAC mismatch, wrong key?")
+          self.secoc_mismatch_counter += 1
+
     # *** steer torque ***
     new_steer = int(round(actuators.steer * self.params.STEER_MAX))
     apply_steer = apply_meas_steer_torque_limits(new_steer, self.last_steer, CS.out.steeringTorqueEps, self.params)
@@ -187,7 +202,16 @@ class CarController(CarControllerBase):
     # toyota can trace shows STEERING_LKA at 42Hz, with counter adding alternatively 1 and 2;
     # sending it at 100Hz seem to allow a higher rate limit, as the rate limit seems imposed
     # on consecutive messages
-    can_sends.append(toyotacan.create_steer_command(self.packer, apply_steer, apply_steer_req))
+    steer_command = toyotacan.create_steer_command(self.packer, apply_steer, apply_steer_req)
+    if self.CP.flags & ToyotaFlags.SECOC.value:
+      # TODO: check if this slow and needs to be done by the CANPacker
+      steer_command = add_mac(self.secoc_key,
+                              int(CS.secoc_synchronization['TRIP_CNT']),
+                              int(CS.secoc_synchronization['RESET_CNT']),
+                              self.secoc_lka_message_counter,
+                              steer_command)
+      self.secoc_lka_message_counter += 1
+    can_sends.append(steer_command)
 
     # STEERING_LTA does not seem to allow more rate by sending faster, and may wind up easier
     if self.frame % 2 == 0 and self.CP.carFingerprint in TSS2_CAR:
@@ -202,13 +226,27 @@ class CarController(CarControllerBase):
       can_sends.append(toyotacan.create_lta_steer_command(self.packer, self.CP.steerControlType, self.last_angle,
                                                           lta_active, self.frame // 2, torque_wind_down))
 
+      if self.CP.flags & ToyotaFlags.SECOC.value:
+        lta_steer_2 = toyotacan.create_lta_steer_command_2(self.packer, self.frame // 2)
+        lta_steer_2 = add_mac(self.secoc_key,
+                              int(CS.secoc_synchronization['TRIP_CNT']),
+                              int(CS.secoc_synchronization['RESET_CNT']),
+                              self.secoc_lta_message_counter,
+                              lta_steer_2)
+        self.secoc_lta_message_counter += 1
+        can_sends.append(lta_steer_2)
+
     # *** gas and brake ***
     # For cars where we allow a higher max acceleration of 2.0 m/s^2, compensate for PCM request overshoot and imprecise braking
     # TODO: sometimes when switching from brake to gas quickly, CLUTCH->ACCEL_NET shows a slow unwind. make it go to 0 immediately
     if self.CP.flags & ToyotaFlags.RAISED_ACCEL_LIMIT:
       if CC.longActive and not CS.out.cruiseState.standstill:
         # calculate amount of acceleration PCM should apply to reach target, given pitch
-        accel_due_to_pitch = math.sin(CS.slope_angle) * ACCELERATION_DUE_TO_GRAVITY
+        if len(CC.orientationNED) == 3:
+          accel_due_to_pitch = math.sin(CC.orientationNED[1]) * ACCELERATION_DUE_TO_GRAVITY
+        else:
+          accel_due_to_pitch = 0.0
+
         net_acceleration_request = actuators.accel + accel_due_to_pitch
 
         # let PCM handle stopping for now
@@ -326,7 +364,7 @@ class CarController(CarControllerBase):
     if self.frame % 20 == 0 and self.CP.flags & ToyotaFlags.DISABLE_RADAR.value:
       can_sends.append(make_tester_present_msg(0x750, 0, 0xF))
 
-    new_actuators = copy.copy(actuators)
+    new_actuators = actuators.as_builder()
     new_actuators.steer = apply_steer / self.params.STEER_MAX
     new_actuators.steerOutputCan = apply_steer
     new_actuators.steeringAngleDeg = self.last_angle
