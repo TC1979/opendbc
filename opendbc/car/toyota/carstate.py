@@ -109,7 +109,7 @@ class CarState(CarStateBase):
       if self.pcm_accel_net + neutral_accel < 0.0:
         self.pcm_accel_net += neutral_accel
     else:
-      if self.CP.carFingerprint not in SECOC_CAR:
+      if not (self.CP.flags & ToyotaFlags.SECOC.value):
         self.pcm_accel_net = cp.vl["PCM_CRUISE"]["NEUTRAL_FORCE"] / self.CP.mass
 
     ret.doorOpen = any([cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_FL"], cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_FR"],
