@@ -109,7 +109,8 @@ class CarState(CarStateBase):
       if self.pcm_accel_net + neutral_accel < 0.0:
         self.pcm_accel_net += neutral_accel
     else:
-      self.pcm_accel_net = cp.vl["PCM_CRUISE"]["NEUTRAL_FORCE"] / self.CP.mass
+	  if self.CP.carFingerprint not in SECOC_CAR:
+        self.pcm_accel_net = cp.vl["PCM_CRUISE"]["NEUTRAL_FORCE"] / self.CP.mass
 
     ret.doorOpen = any([cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_FL"], cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_FR"],
                         cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_RL"], cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_RR"]])
@@ -228,7 +229,6 @@ class CarState(CarStateBase):
       ret.cruiseState.standstill = self.pcm_acc_status == 7
     ret.cruiseState.enabled = bool(cp.vl["PCM_CRUISE"]["CRUISE_ACTIVE"])
     ret.cruiseState.nonAdaptive = self.pcm_acc_status in (1, 2, 3, 4, 5, 6)
-    self.pcm_neutral_force = cp.vl["PCM_CRUISE"]["NEUTRAL_FORCE"]
 
     ret.genericToggle = bool(cp.vl["LIGHT_STALK"]["AUTO_HIGH_BEAM"])
     ret.espDisabled = cp.vl["ESP_CONTROL"]["TC_DISABLED"] != 0
