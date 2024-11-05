@@ -115,10 +115,6 @@ struct OnroadEventDEPRECATED @0x9b1657f34caf3ad3 {
     espActive @121;
     personalityChanged @122;
     aeb @123;
-    atlEngageSound @126;
-    atlDisengageSound @127;
-    torqueNNLoad @128;
-    automaticBrakehold @129;
 
     radarCanErrorDEPRECATED @15;
     communityFeatureDisallowedDEPRECATED @62;
