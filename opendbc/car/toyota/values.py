@@ -49,7 +49,7 @@ class ToyotaFlags(IntFlag):
   HYBRID = 1
   SMART_DSU = 2
   DISABLE_RADAR = 4
-  RADAR_CAN_FILTER = 2048
+  RADAR_CAN_FILTER = 4096
 
   # Static flags
   TSS2 = 8
