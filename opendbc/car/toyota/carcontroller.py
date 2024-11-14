@@ -1,7 +1,8 @@
 import math
 from opendbc.car import carlog, apply_meas_steer_torque_limits, apply_std_steer_angle_limits, common_fault_avoidance, \
-                        make_tester_present_msg, rate_limit, structs, ACCELERATION_DUE_TO_GRAVITY
+                        make_tester_present_msg, rate_limit, structs, ACCELERATION_DUE_TO_GRAVITY, DT_CTRL
 from opendbc.car.can_definitions import CanData
+from opendbc.car.common.filter_simple import FirstOrderFilter
 from opendbc.car.common.numpy_fast import clip, interp
 from opendbc.car.secoc import add_mac, build_sync_mac
 from opendbc.car.interfaces import CarControllerBase
@@ -17,7 +18,10 @@ LongCtrlState = structs.CarControl.Actuators.LongControlState
 SteerControlType = structs.CarParams.SteerControlType
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
 
+# The up limit allows the brakes/gas to unwind quickly leaving a stop,
+# the down limit matches the rate of ACCEL_NET, reducing PCM compensation windup
 ACCEL_WINDUP_LIMIT = 0.5  # m/s^2 / frame
+ACCEL_WINDDOWN_LIMIT = -5.0 * DT_CTRL * 3  # m/s^2 / frame
 
 # LKA limits
 # EPS faults if you apply torque while the steering rate is above 100 deg/s for too long
@@ -70,11 +74,12 @@ class CarController(CarControllerBase):
     self.prohibit_neg_calculation = True
     self.distance_button = 0
 
-    self.pcm_accel_compensation = 0.0
-    self.permit_braking = 0.0
+    self.pcm_accel_compensation = FirstOrderFilter(0, 0.5, DT_CTRL * 3)
+    self.permit_braking = True
 
     self.packer = CANPacker(dbc_name)
     self.accel = 0
+    self.prev_accel = 0
 
     self.secoc_lka_message_counter = 0
     self.secoc_lta_message_counter = 0
@@ -96,6 +101,7 @@ class CarController(CarControllerBase):
 
   def update(self, CC, CS, now_nanos):
     actuators = CC.actuators
+    stopping = actuators.longControlState == LongCtrlState.stopping
     hud_control = CC.hudControl
     pcm_cancel_cmd = CC.cruiseControl.cancel
     lat_active = CC.latActive and abs(CS.out.steeringTorque) < MAX_USER_TORQUE
@@ -237,56 +243,6 @@ class CarController(CarControllerBase):
         can_sends.append(lta_steer_2)
 
     # *** gas and brake ***
-    # For cars where we allow a higher max acceleration of 2.0 m/s^2, compensate for PCM request overshoot and imprecise braking
-    # TODO: sometimes when switching from brake to gas quickly, CLUTCH->ACCEL_NET shows a slow unwind. make it go to 0 immediately
-    if self.CP.flags & ToyotaFlags.RAISED_ACCEL_LIMIT:
-      if CC.longActive and not CS.out.cruiseState.standstill:
-        # calculate amount of acceleration PCM should apply to reach target, given pitch
-        if len(CC.orientationNED) == 3:
-          accel_due_to_pitch = math.sin(CC.orientationNED[1]) * ACCELERATION_DUE_TO_GRAVITY
-        else:
-          accel_due_to_pitch = 0.0
-
-        net_acceleration_request = actuators.accel + accel_due_to_pitch
-
-        # let PCM handle stopping for now
-        pcm_accel_compensation = 0.0
-        if actuators.longControlState != LongCtrlState.stopping:
-          pcm_accel_compensation = 2.0 * (CS.pcm_accel_net - net_acceleration_request)
-
-        # prevent compensation windup
-        pcm_accel_compensation = clip(pcm_accel_compensation, actuators.accel - self.params.ACCEL_MAX,
-                                      actuators.accel - self.params.ACCEL_MIN)
-
-        self.pcm_accel_compensation = rate_limit(pcm_accel_compensation, self.pcm_accel_compensation, -0.01, 0.01)
-        pcm_accel_cmd = actuators.accel - self.pcm_accel_compensation
-
-        # Along with rate limiting positive jerk below, this greatly improves gas response time
-        # Consider the net acceleration request that the PCM should be applying (pitch included)
-        if net_acceleration_request < 0.1:
-          self.permit_braking = True
-        elif net_acceleration_request > 0.2:
-          self.permit_braking = False
-      else:
-        self.pcm_accel_compensation = 0.0
-        pcm_accel_cmd = actuators.accel
-        self.permit_braking = True
-    else:
-      # Set thresholds for compensatory force calculations
-      comp_thresh = interp(CS.out.vEgo, COMPENSATORY_CALCULATION_THRESHOLD_BP, COMPENSATORY_CALCULATION_THRESHOLD_V)
-      if not CC.longActive:
-        self.prohibit_neg_calculation = True
-      if CS.pcm_accel_net > comp_thresh:
-        self.prohibit_neg_calculation = False
-      # Calculate acceleration offset only when allowed
-      self.pcm_accel_compensation = CS.pcm_accel_net if CC.longActive and not self.prohibit_neg_calculation else 0.0
-      # Compute PCM acceleration command only if long control is active
-      pcm_accel_cmd = clip(actuators.accel + self.pcm_accel_compensation, self.params.ACCEL_MIN, self.params.ACCEL_MAX) if CC.longActive and not \
-         CS.out.cruiseState.standstill else 0.0
-      if pcm_accel_cmd < 0.1:
-        self.permit_braking = True
-      elif pcm_accel_cmd > 0.2:
-        self.permit_braking = False
 
     # on entering standstill, send standstill request
     if CS.out.standstill and not self.last_standstill and (self.CP.carFingerprint not in NO_STOP_TIMER_CAR):
@@ -308,30 +264,82 @@ class CarController(CarControllerBase):
     # handle UI messages
     fcw_alert = hud_control.visualAlert == VisualAlert.fcw
     steer_alert = hud_control.visualAlert in (VisualAlert.steerRequired, VisualAlert.ldw)
+    lead = hud_control.leadVisible or CS.out.vEgo < 12.  # at low speed we always assume the lead is present so ACC can be engaged
+    reverse_acc = 2 if self._reverse_acc_change else 1
 
-    # we can spam can to cancel the system even if we are using lat only control
-    if (self.frame % 3 == 0 and self.CP.openpilotLongitudinalControl) or pcm_cancel_cmd:
-      lead = hud_control.leadVisible or CS.out.vEgo < 12.  # at low speed we always assume the lead is present so ACC can be engaged
+    if self.CP.openpilotLongitudinalControl:
+      if self.frame % 3 == 0:
+        # Press distance button until we are at the correct bar length. Only change while enabled to avoid skipping startup popup
+        if self.frame % 6 == 0 and self.CP.openpilotLongitudinalControl:
+          desired_distance = 4 - hud_control.leadDistanceBars
+          if CS.out.cruiseState.enabled and CS.pcm_follow_distance != desired_distance:
+            self.distance_button = not self.distance_button
+          else:
+            self.distance_button = 0
 
-      reverse_acc = 2 if self._reverse_acc_change else 1
+        # internal PCM gas command can get stuck unwinding from negative accel so we apply a generous rate limit
+        pcm_accel_cmd = actuators.accel
+        if CC.longActive:
+          pcm_accel_cmd = rate_limit(pcm_accel_cmd, self.prev_accel, ACCEL_WINDDOWN_LIMIT, ACCEL_WINDUP_LIMIT)
 
-      # Press distance button until we are at the correct bar length. Only change while enabled to avoid skipping startup popup
-      if self.frame % 6 == 0 and self.CP.openpilotLongitudinalControl:
-        desired_distance = 4 - hud_control.leadDistanceBars
-        if CS.out.cruiseState.enabled and CS.pcm_follow_distance != desired_distance:
-          self.distance_button = not self.distance_button
+        # calculate amount of acceleration PCM should apply to reach target, given pitch
+        accel_due_to_pitch = math.sin(CC.orientationNED[1]) * ACCELERATION_DUE_TO_GRAVITY if len(CC.orientationNED) == 3 else 0.0
+        net_acceleration_request = pcm_accel_cmd + accel_due_to_pitch
+
+        # For cars where we allow a higher max acceleration of 2.0 m/s^2, compensate for PCM request overshoot and imprecise braking
+        if self.CP.flags & ToyotaFlags.RAISED_ACCEL_LIMIT:
+          if CC.longActive and not CS.out.cruiseState.standstill:
+            # let PCM handle stopping for now
+            pcm_accel_compensation = 0.0
+            if not stopping:
+              pcm_accel_compensation = 2.0 * (CS.pcm_accel_net - net_acceleration_request)
+
+            # prevent compensation windup
+            pcm_accel_compensation = clip(pcm_accel_compensation, pcm_accel_cmd - self.params.ACCEL_MAX,
+                                          pcm_accel_cmd - self.params.ACCEL_MIN)
+
+            pcm_accel_cmd = pcm_accel_cmd - self.pcm_accel_compensation.update(pcm_accel_compensation)
+
+          else:
+            self.pcm_accel_compensation.x = 0.0
+            self.permit_braking = True
+
+          # Along with rate limiting positive jerk above, this greatly improves gas response time
+          # Consider the net acceleration request that the PCM should be applying (pitch included)
+          if net_acceleration_request < 0.1 or stopping or not CC.longActive:
+            self.permit_braking = True
+          elif net_acceleration_request > 0.2:
+            self.permit_braking = False
+
         else:
-          self.distance_button = 0
+          # Set thresholds for compensatory force calculations
+          comp_thresh = interp(CS.out.vEgo, COMPENSATORY_CALCULATION_THRESHOLD_BP, COMPENSATORY_CALCULATION_THRESHOLD_V)
+          if not CC.longActive:
+            self.prohibit_neg_calculation = True
+          if CS.pcm_accel_net > comp_thresh:
+            self.prohibit_neg_calculation = False
+          # Calculate acceleration offset only when allowed
+          self.pcm_accel_compensation = CS.pcm_accel_net if CC.longActive and not self.prohibit_neg_calculation else 0.0
+          # Compute PCM acceleration command only if long control is active
+          pcm_accel_cmd = clip(actuators.accel + self.pcm_accel_compensation, self.params.ACCEL_MIN, self.params.ACCEL_MAX) if CC.longActive and not \
+            CS.out.cruiseState.standstill else 0.0
+          if pcm_accel_cmd < 0.1:
+            self.permit_braking = True
+          elif pcm_accel_cmd > 0.2:
+            self.permit_braking = False
 
-      # Lexus IS uses a different cancellation message
-      if pcm_cancel_cmd and self.CP.carFingerprint in UNSUPPORTED_DSU_CAR:
-        can_sends.append(toyotacan.create_acc_cancel_command(self.packer))
-      elif self.CP.openpilotLongitudinalControl:
-        can_sends.append(toyotacan.create_accel_command(self.packer, pcm_accel_cmd, actuators.accel, self.permit_braking, CS.out.aEgo, CC.longActive,\
-                                                        pcm_cancel_cmd, self.standstill_req, lead, CS.acc_type, fcw_alert, self.distance_button, reverse_acc))
+        can_sends.append(toyotacan.create_accel_command(self.packer, pcm_accel_cmd, actuators.accel, pcm_cancel_cmd, self.permit_braking, CS.out.aEgo, CC.longActive,\
+                                                         self.standstill_req, lead, CS.acc_type, fcw_alert, self.distance_button, reverse_acc))
         self.accel = pcm_accel_cmd
-      else:
-        can_sends.append(toyotacan.create_accel_command(self.packer, 0, 0, 0, 0, 0, pcm_cancel_cmd, 0, lead, CS.acc_type, 0, self.distance_button, reverse_acc))
+        self.prev_accel = actuators.accel
+
+    else:
+      # we can spam can to cancel the system even if we are using lat only control
+      if pcm_cancel_cmd:
+        if self.CP.carFingerprint in UNSUPPORTED_DSU_CAR:
+          can_sends.append(toyotacan.create_acc_cancel_command(self.packer))
+        else:
+          can_sends.append(toyotacan.create_accel_command(self.packer, 0, 0, pcm_cancel_cmd, 1, 0, 0, 0, lead, CS.acc_type, 0, self.distance_button, reverse_acc))
 
     # *** hud ui ***
     if self.CP.carFingerprint != CAR.TOYOTA_PRIUS_V:
