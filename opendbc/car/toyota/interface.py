@@ -173,6 +173,8 @@ class CarInterface(CarInterfaceBase):
       # This also prevents unnecessary request windup due to internal car jerk limits
       if ret.flags & ToyotaFlags.RAISED_ACCEL_LIMIT:
         tune.kiV = [0.25]
+        tune.kpV = [0.0]
+        tune.kiBP = [0.0]
     else:
       ret.stopAccel = -2.5
       ret.stoppingDecelRate = 0.24
