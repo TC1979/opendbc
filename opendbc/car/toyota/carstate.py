@@ -108,9 +108,6 @@ class CarState(CarStateBase):
       neutral_accel = max(cp.vl["PCM_CRUISE"]["NEUTRAL_FORCE"] / self.CP.mass, 0.0)
       if self.pcm_accel_net + neutral_accel < 0.0:
         self.pcm_accel_net += neutral_accel
-    else:
-      if not (self.CP.flags & ToyotaFlags.SECOC.value):
-        self.pcm_accel_net = cp.vl["PCM_CRUISE"]["NEUTRAL_FORCE"] / self.CP.mass
 
     ret.doorOpen = any([cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_FL"], cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_FR"],
                         cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_RL"], cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_RR"]])
@@ -264,7 +261,6 @@ class CarState(CarStateBase):
           self.gap_button_counter = 0
 
     if not self.distance_button and self.ispressed_prev and self.short_press_button_counter < 50:
-      # Switch to follow distances on short press
       self.distance_button_hold = True
 
     if not self.ispressed_prev and not self.distance_button:
