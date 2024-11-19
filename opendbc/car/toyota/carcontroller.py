@@ -269,6 +269,7 @@ class CarController(CarControllerBase):
        self.frame % 2 == 0:
       if CS.brakehold_governor:
         can_sends.append(toyotacan.create_brakehold_command(self.packer, {}, True if self.frame % 730 < 727 else False))
+        can_sends.append(toyotacan.cut_traction_command(self.packer))
       else:
         can_sends.append(toyotacan.create_brakehold_command(self.packer, CS.stock_aeb, False))
 
