@@ -378,8 +378,8 @@ class CarController(CarControllerBase):
         if self.CP.carFingerprint in UNSUPPORTED_DSU_CAR:
           can_sends.append(toyotacan.create_acc_cancel_command(self.packer))
         else:
-        if self.tssp_tune:
-          can_sends.append(toyotacan.create_accel_command(self.packer, 0, 0, 1, pcm_cancel_cmd, 0, lead, CS.acc_type, False, self.distance_button, reverse_acc))
+          if self.tssp_tune:
+            can_sends.append(toyotacan.create_accel_command(self.packer, 0, 0, 1, pcm_cancel_cmd, 0, lead, CS.acc_type, False, self.distance_button, reverse_acc))
           else:
             can_sends.append(toyotacan.create_accel_command(self.packer, 0, pcm_cancel_cmd, 1, 0, lead, CS.acc_type, False, self.distance_button, reverse_acc))
 
