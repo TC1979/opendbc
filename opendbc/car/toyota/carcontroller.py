@@ -280,6 +280,7 @@ class CarController(CarControllerBase):
     steer_alert = hud_control.visualAlert in (VisualAlert.steerRequired, VisualAlert.ldw)
     lead = hud_control.leadVisible or CS.out.vEgo < 12.  # at low speed we always assume the lead is present so ACC can be engaged
     reverse_acc = 2 if self._reverse_acc_change else 1
+    self.tssp_tune = True
 
     if self.CP.openpilotLongitudinalControl:
       if self.frame % 3 == 0:
@@ -341,7 +342,6 @@ class CarController(CarControllerBase):
 
         pcm_accel_cmd = clip(pcm_accel_cmd, self.params.ACCEL_MIN, self.params.ACCEL_MAX)
 
-        self.tssp_tune = True
         if self.tssp_tune:
           # PCM compensation Transition Logic (enter only at first positive calculation)
           if CS.out.gasPressed or not CS.out.cruiseState.enabled:
