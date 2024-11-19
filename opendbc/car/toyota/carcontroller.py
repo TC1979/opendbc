@@ -365,8 +365,8 @@ class CarController(CarControllerBase):
         if self.tssp_tune:
           # AleSato apply in a diff way the neutralForce compensation than Irene's (Cydia2020)
           accel_raw = -0.4 if stopping else actuators.accel if should_compensate else pcm_accel_cmd
-          can_sends.append(toyotacan.create_my_accel_command(self.packer, pcm_accel_cmd, accel_raw, stopping, pcm_cancel_cmd, self.standstill_req, \
-                                                          lead, CS.acc_type, fcw_alert, self.distance_button, reverse_acc))
+          can_sends.append(toyotacan.create_my_accel_command(self.packer, pcm_accel_cmd, accel_raw, stopping, pcm_cancel_cmd, self.standstill_req,
+                                                             lead, CS.acc_type, fcw_alert, self.distance_button, reverse_acc))
         else:
           can_sends.append(toyotacan.create_accel_command(self.packer, pcm_accel_cmd, pcm_cancel_cmd, self.permit_braking, self.standstill_req, lead,
                                                           CS.acc_type, fcw_alert, self.distance_button, reverse_acc))
@@ -379,7 +379,8 @@ class CarController(CarControllerBase):
           can_sends.append(toyotacan.create_acc_cancel_command(self.packer))
         else:
           if self.tssp_tune:
-            can_sends.append(toyotacan.create_my_accel_command(self.packer, 0, 0, 1, pcm_cancel_cmd, 0, lead, CS.acc_type, 0, self.distance_button, reverse_acc))
+            can_sends.append(toyotacan.create_my_accel_command(self.packer, 0, 0, 1, pcm_cancel_cmd, 0, lead, CS.acc_type, 0, self.distance_button, 
+                                                               reverse_acc))
           else:
             can_sends.append(toyotacan.create_accel_command(self.packer, 0, pcm_cancel_cmd, 1, 0, lead, CS.acc_type, False, self.distance_button, reverse_acc))
 
