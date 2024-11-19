@@ -403,7 +403,7 @@ class CarState(CarStateBase):
       ]
 
     if Params().get_bool("toyota_bsm"):
-      messages.append(("DEBUG", 65))
+      pt_messages.append(("DEBUG", 65))
 
     cam_messages = []
     if CP.carFingerprint != CAR.TOYOTA_PRIUS_V:
