@@ -280,7 +280,7 @@ class CarController(CarControllerBase):
     steer_alert = hud_control.visualAlert in (VisualAlert.steerRequired, VisualAlert.ldw)
     lead = hud_control.leadVisible or CS.out.vEgo < 12.  # at low speed we always assume the lead is present so ACC can be engaged
     reverse_acc = 2 if self._reverse_acc_change else 1
-    self.tssp_tune = True
+    self.ToyotaTune = Params().get_bool("ToyotaTune")
 
     if self.CP.openpilotLongitudinalControl:
       if self.frame % 3 == 0:
@@ -342,7 +342,7 @@ class CarController(CarControllerBase):
 
         pcm_accel_cmd = clip(pcm_accel_cmd, self.params.ACCEL_MIN, self.params.ACCEL_MAX)
 
-        if self.tssp_tune:
+        if self.ToyotaTune:
           # PCM compensation Transition Logic (enter only at first positive calculation)
           if CS.out.gasPressed or not CS.out.cruiseState.enabled:
             self.reset_pcm_compensation = True
@@ -362,7 +362,7 @@ class CarController(CarControllerBase):
           else:
             pcm_accel_cmd = 0.
 
-        if self.tssp_tune:
+        if self.ToyotaTune:
           # AleSato apply in a diff way the neutralForce compensation than Irene's (Cydia2020)
           accel_raw = -0.4 if stopping else actuators.accel if should_compensate else pcm_accel_cmd
           can_sends.append(toyotacan.create_my_accel_command(self.packer, pcm_accel_cmd, accel_raw, stopping, pcm_cancel_cmd, self.standstill_req,
@@ -378,7 +378,7 @@ class CarController(CarControllerBase):
         if self.CP.carFingerprint in UNSUPPORTED_DSU_CAR:
           can_sends.append(toyotacan.create_acc_cancel_command(self.packer))
         else:
-          if self.tssp_tune:
+          if self.ToyotaTune:
             can_sends.append(toyotacan.create_my_accel_command(self.packer, 0, 0, 1, pcm_cancel_cmd, 0, lead, CS.acc_type, 0, self.distance_button,
                                                                reverse_acc))
           else:
