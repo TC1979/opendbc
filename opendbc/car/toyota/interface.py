@@ -157,18 +157,14 @@ class CarInterface(CarInterfaceBase):
 
     tune = ret.longitudinalTuning
 
-    if Params().get_bool("ToyotaTune"):
-      tune.deadzoneBP = [0., 5.,  6.,    7.,    20., 30]
-      tune.deadzoneV = [0.,  0.,  0.001, 0.003, .1, .15]
-
-    tune.kiBP = [0.,   1.,   2.,     8.,     12.,   20.,   27.]
-    tune.kiV = [0.31,  0.32,  0.295,  0.22,  0.20,  0.17, 0.10]
+    tune.kiBP = [0.,  1.,   2.,    5.,    8.,    12.,   20.,  27.]
+    tune.kiV = [0.33, 0.33, 0.295, 0.241, 0.225, 0.205, 0.17, 0.10]
 
     if candidate in TSS2_CAR:
       ret.stopAccel = -0.4
       ret.vEgoStopping = 0.25
       ret.vEgoStarting = 0.01
-      ret.stoppingDecelRate = 0.002  # reach stopping target smoothly
+      ret.stoppingDecelRate = 0.0025  # reach stopping target smoothly
 
       # Since we compensate for imprecise acceleration in carcontroller and error correct on aEgo, we can avoid using gains
       if ret.flags & ToyotaFlags.RAISED_ACCEL_LIMIT:
