@@ -165,7 +165,7 @@ class CarInterface(CarInterfaceBase):
 
     else:
       ret.stopAccel = -2.5
-      ret.stoppingDecelRate = 0.3
+      ret.stoppingDecelRate = 0.28
 
       # Hybrids have much quicker longitudinal actuator response
       if ret.flags & ToyotaFlags.HYBRID.value:
