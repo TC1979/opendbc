@@ -179,22 +179,28 @@ def get_nn_model_path(car, eps_firmware) -> tuple[str | None, float]:
     else:
       check_model = car
     model_path, max_similarity = check_nn_path(check_model)
-    if car not in model_path or 0.0 <= max_similarity < 0.9:
+    if car not in str(model_path) or 0.0 <= max_similarity < 0.9:
       check_model = car
       model_path, max_similarity = check_nn_path(check_model)
-      if car not in model_path or 0.0 <= max_similarity < 0.9:
+      if car not in str(model_path) or 0.0 <= max_similarity < 0.9:
         model_path = None
+        max_similarity = 0.0
     return model_path, max_similarity
 
   with open(TORQUE_SUBSTITUTE_PATH, 'rb') as f:
     sub = tomllib.load(f)
   sub_candidate = sub.get(car, car)
 
+  best_model = None
+  best_similarity = 0.0
+  
   for candidate in [car, sub_candidate]:
     model, similarity_score = check_candidate(candidate, eps_firmware)
-    if model is not None:
-      return model
-  return None
+    if model is not None and similarity_score > best_similarity:
+      best_model = model
+      best_similarity = similarity_score
+      
+  return best_model, best_similarity
 
 def get_nn_model(car, eps_firmware) -> tuple[FluxModel | None, float]:
   model_path, similarity_score = get_nn_model_path(car, eps_firmware)
