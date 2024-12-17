@@ -60,21 +60,31 @@ def poll_blindspot_status(lr):
   return CanData(0x750, m, 0)
 
 def get_long_tune(CP, params):
-  # kiBP = [0.]
-  kiBP = [0.,  5.,   12.,  20.,  27.]
-  kiV = [0.31, 0.21, 0.20, 0.17, 0.10]
+  kiBP = [0.]
   kdBP = [0.]
-  kdV = [0.25 / 3]
-  # kdV = [0.]
-  # if CP.carFingerprint in TSS2_CAR:
-    # kiV = [0.5]
-    # kdV = [0.25 / 4]
+  kdV = [0.]
+  kpV = [0.]
 
-  # else:
-    # kiBP = [0., 5., 35.]
-    # kiV = [3.6, 2.4, 1.5]
+  if Params().get_bool("ToyotaTune"):
+    kpV = [0.88]
+    kdV = [0.25 / 3]
+    kiBP = [0., 32.]
+    kiV = [.4, .2]
 
-  return PIDController(0.0, (kiBP, kiV), k_f=1.0, k_d=(kdBP, kdV),
+    if CP.carFingerprint in TSS2_CAR:
+      kiBP = [0.,  5.,   12.,  20.,  27.]
+      kiV = [0.31, 0.21, 0.20, 0.17, 0.10]
+
+  else:
+    if CP.carFingerprint in TSS2_CAR:
+      kiV = [0.25]
+      kdV = [0.25 / 4]
+
+    else:
+      kiBP = [0., 5., 35.]
+      kiV = [3.6, 2.4, 1.5]
+
+  return PIDController(kpV, (kiBP, kiV), k_f=1.0, k_d=(kdBP, kdV),
                        pos_limit=params.ACCEL_MAX, neg_limit=params.ACCEL_MIN,
                        rate=1 / (DT_CTRL * 3))
 
@@ -290,7 +300,6 @@ class CarController(CarControllerBase):
        self.frame % 2 == 0:
       if CS.brakehold_governor:
         can_sends.append(toyotacan.create_brakehold_command(self.packer, {}, True if self.frame % 730 < 727 else False))
-        can_sends.append(toyotacan.cut_traction_command(self.packer))
       else:
         can_sends.append(toyotacan.create_brakehold_command(self.packer, CS.stock_aeb, False))
 
@@ -374,7 +383,7 @@ class CarController(CarControllerBase):
           else:
             accel_offset = 0.
           if not CS.out.gasPressed:
-            pcm_accel_cmd = clip(actuators.accel + accel_offset, self.params.ACCEL_MIN, self.params.ACCEL_MAX)
+            pcm_accel_cmd = clip(pcm_accel_cmd + accel_offset, self.params.ACCEL_MIN, self.params.ACCEL_MAX)
           else:
             pcm_accel_cmd = 0.
 
