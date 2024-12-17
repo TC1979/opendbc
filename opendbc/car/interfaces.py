@@ -193,13 +193,13 @@ def get_nn_model_path(car, eps_firmware) -> tuple[str | None, float]:
 
   best_model = None
   best_similarity = 0.0
-  
+
   for candidate in [car, sub_candidate]:
     model, similarity_score = check_candidate(candidate, eps_firmware)
     if model is not None and similarity_score > best_similarity:
       best_model = model
       best_similarity = similarity_score
-      
+
   return best_model, best_similarity
 
 def get_nn_model(car, eps_firmware) -> tuple[FluxModel | None, float]:
