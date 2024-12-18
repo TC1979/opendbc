@@ -66,7 +66,7 @@ def get_long_tune(CP, params):
   kpV = [0.]
 
   if Params().get_bool("ToyotaTune"):
-    kpV = [0.88]
+    # kpV = [0.88]
     kdV = [0.25 / 3]
     kiBP = [0., 32.]
     kiV = [.4, .2]
@@ -84,7 +84,7 @@ def get_long_tune(CP, params):
       kiBP = [0., 5., 35.]
       kiV = [3.6, 2.4, 1.5]
 
-  return PIDController(kpV, (kiBP, kiV), k_f=1.0, k_d=(kdBP, kdV),
+  return PIDController(0.0, (kiBP, kiV), k_f=1.0, k_d=(kdBP, kdV),
                        pos_limit=params.ACCEL_MAX, neg_limit=params.ACCEL_MIN,
                        rate=1 / (DT_CTRL * 3))
 
