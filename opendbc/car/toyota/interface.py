@@ -157,9 +157,9 @@ class CarInterface(CarInterfaceBase):
     if candidate in TSS2_CAR:
       ret.stopAccel = -0.4
       ret.flags |= ToyotaFlags.RAISED_ACCEL_LIMIT.value
-      ret.vEgoStopping = 0.20
-      ret.vEgoStarting = 0.10
-      ret.stoppingDecelRate = 0.1  # reach stopping target smoothly
+      ret.vEgoStopping = 0.15
+      ret.vEgoStarting = 0.05
+      ret.stoppingDecelRate = 0.03  # reach stopping target smoothly
 
     else:
       ret.stopAccel = -2.5
