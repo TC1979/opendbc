@@ -99,6 +99,8 @@ class CarState(CarStateBase):
 
     if not self.CP.flags & ToyotaFlags.SECOC.value:
       self.gvc = cp.vl["VSC1S07"]["GVC"]
+    if not (self.CP.flags & ToyotaFlags.SECOC.value):
+      self.pcm_accel_net = cp.vl["PCM_CRUISE"]["NEUTRAL_FORCE"] / self.CP.mass
 
     ret.doorOpen = any([cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_FL"], cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_FR"],
                         cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_RL"], cp.vl["BODY_CONTROL_STATE"]["DOOR_OPEN_RR"]])
@@ -212,8 +214,6 @@ class CarState(CarStateBase):
       # ignore standstill state in certain vehicles, since pcm allows to restart with just an acceleration request
       ret.cruiseState.standstill = self.pcm_acc_status == 7
     ret.cruiseState.enabled = bool(cp.vl["PCM_CRUISE"]["CRUISE_ACTIVE"])
-    if not (self.CP.flags & ToyotaFlags.SECOC.value):
-      self.pcm_neutral_force = cp.vl["PCM_CRUISE"]["NEUTRAL_FORCE"]
     ret.cruiseState.nonAdaptive = self.pcm_acc_status in (1, 2, 3, 4, 5, 6)
 
     ret.genericToggle = bool(cp.vl["LIGHT_STALK"]["AUTO_HIGH_BEAM"])

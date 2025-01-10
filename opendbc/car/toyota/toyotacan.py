@@ -40,10 +40,11 @@ def create_lta_steer_command_2(packer, frame):
   return packer.make_can_msg("STEERING_LTA_2", 0, values)
 
 
-def create_accel_command(packer, accel, pcm_cancel, permit_braking, standstill_req, lead, acc_type, fcw_alert, distance, reverse_acc):
+def create_accel_command(packer, accel, accel_net, pcm_cancel, permit_braking, standstill_req, lead, acc_type, fcw_alert, distance, reverse_acc):
   # TODO: find the exact canceling bit that does not create a chime
   values = {
     "ACCEL_CMD": accel,
+    "ACCEL_CMD_ALT": accel_net,
     "ACC_TYPE": acc_type,
     "DISTANCE": distance,
     "MINI_CAR": lead,
@@ -52,24 +53,6 @@ def create_accel_command(packer, accel, pcm_cancel, permit_braking, standstill_r
     "CANCEL_REQ": pcm_cancel,
     "ALLOW_LONG_PRESS": reverse_acc,
     "ACC_CUT_IN": fcw_alert,  # only shown when ACC enabled
-  }
-  return packer.make_can_msg("ACC_CONTROL", 0, values)
-
-
-def create_my_accel_command(packer, accel, accel_raw, stopping, pcm_cancel, standstill_req, lead, acc_type,
-                         fcw_alert, update_distance_line, reverse_acc):
-  # TODO: find the exact canceling bit that does not create a chime
-  values = {
-    "ACCEL_CMD": accel,
-    "ACC_TYPE": acc_type,
-    "DISTANCE": update_distance_line,
-    "MINI_CAR": lead,
-    "PERMIT_BRAKING": 1 if accel < 0.3 or stopping else 0,
-    "RELEASE_STANDSTILL": not standstill_req,
-    "CANCEL_REQ": pcm_cancel,
-    "ALLOW_LONG_PRESS": reverse_acc,
-    "ACC_CUT_IN": fcw_alert,  # only shown when ACC enabled
-    "ACCEL_CMD_ALT": accel_raw,
   }
   return packer.make_can_msg("ACC_CONTROL", 0, values)
 
