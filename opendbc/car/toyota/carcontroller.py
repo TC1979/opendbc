@@ -73,8 +73,8 @@ def get_long_tune(CP, params):
   kdV = [0.25 / 3]
 
   if Params().get_bool("ToyotaTune"):
-    kiBP = [0., 5.]
-    kiV = [0.8, 1.2]
+    kiBP = [0., 5., 15]
+    kiV = [0.8, 2., 1.2]
 
   else:
     kiBP = [0.,  5.,    12.,  20.,  27.]
