@@ -42,6 +42,9 @@ MAX_LTA_DRIVER_TORQUE_ALLOWANCE = 150  # slightly above steering pressed allows 
 COMPENSATORY_CALCULATION_THRESHOLD_V = [-0.2, -0.2, -0.05]  # m/s^2
 COMPENSATORY_CALCULATION_THRESHOLD_BP = [0., 20., 32.]  # m/s
 
+# resume, lead, and lane lines hysteresis
+UI_HYSTERESIS_TIME = 1.  # seconds
+
 GearShifter = structs.CarState.GearShifter
 UNLOCK_CMD = b'\x40\x05\x30\x11\x00\x40\x00\x00'
 LOCK_CMD = b'\x40\x05\x30\x11\x00\x80\x00\x00'
@@ -89,9 +92,12 @@ class CarController(CarControllerBase):
     self.last_steer = 0
     self.last_angle = 0
     self.alert_active = False
-    self.last_standstill = False
+    # self.last_standstill = False
+    self.resume_off_frames = 0.
     self.standstill_req = False
     self.permit_braking = True
+    self._standstill_req = False
+    self.lead = False
     self.steer_rate_counter = 0
     self.prohibit_neg_calculation = True
     self.distance_button = 0
@@ -276,14 +282,20 @@ class CarController(CarControllerBase):
 
     # *** gas and brake ***
 
-    # on entering standstill, send standstill request
-    if CS.out.standstill and not self.last_standstill and (self.CP.carFingerprint not in NO_STOP_TIMER_CAR):
-      self.standstill_req = True
-    if CS.pcm_acc_status != 8 or self.topsng:
-      # pcm entered standstill or it's disabled
-      self.standstill_req = False
-
-    self.last_standstill = CS.out.standstill
+    # *** standstill logic ***
+    # mimic stock behaviour, set standstill_req to False only when openpilot wants to resume
+    if not CC.cruiseControl.resume:
+        self.resume_off_frames += 1  # frame counter for hysteresis
+        # add a 1.5 second hysteresis to when CC.cruiseControl.resume turns off in order to prevent
+        # vehicle's dash from blinking
+        if self.resume_off_frames >= UI_HYSTERESIS_TIME / DT_CTRL:
+            self._standstill_req = True
+    else:
+        self.resume_off_frames = 0
+        self._standstill_req = False
+    # ignore standstill on NO_STOP_TIMER_CAR
+    self.standstill_req = actuators.longControlState == LongCtrlState.stopping and self._standstill_req \
+                          and self.CP.carFingerprint not in NO_STOP_TIMER_CAR and not self.topsng
 
     # AleSato's Automatic Brake Hold
     if Params().get_bool("AleSato_AutomaticBrakeHold") and self.CP.carFingerprint in TSS2_CAR and not (self.CP.flags & ToyotaFlags.SECOC.value) and \
@@ -296,7 +308,11 @@ class CarController(CarControllerBase):
     # handle UI messages
     fcw_alert = hud_control.visualAlert == VisualAlert.fcw
     steer_alert = hud_control.visualAlert in (VisualAlert.steerRequired, VisualAlert.ldw)
-    lead = hud_control.leadVisible or CS.out.vEgo < 12.  # at low speed we always assume the lead is present so ACC can be engaged
+    # lead = hud_control.leadVisible or CS.out.vEgo < 12.  # at low speed we always assume the lead is present so ACC can be engaged
+
+    # *** ui hysteresis ***
+    if self.frame % (UI_HYSTERESIS_TIME / DT_CTRL) == 0:
+      self.lead = hud_control.leadVisible
     reverse_acc = 2 if self._reverse_acc_change else 1
     self.ToyotaTune = Params().get_bool("ToyotaTune")
 
@@ -371,7 +387,7 @@ class CarController(CarControllerBase):
 
           pcm_accel_cmd = clip(pcm_accel_cmd, self.params.ACCEL_MIN, self.params.ACCEL_MAX)
 
-        can_sends.append(toyotacan.create_accel_command(self.packer, pcm_accel_cmd, actuators.accel, pcm_cancel_cmd, self.permit_braking, self.standstill_req, lead,
+        can_sends.append(toyotacan.create_accel_command(self.packer, pcm_accel_cmd, actuators.accel, pcm_cancel_cmd, self.permit_braking, self.standstill_req, self.lead or CS.out.vEgo < 12.,
                                                         CS.acc_type, fcw_alert, self.distance_button, reverse_acc))
         self.accel = pcm_accel_cmd
 
@@ -381,7 +397,7 @@ class CarController(CarControllerBase):
         if self.CP.carFingerprint in UNSUPPORTED_DSU_CAR:
           can_sends.append(toyotacan.create_acc_cancel_command(self.packer))
         else:
-          can_sends.append(toyotacan.create_accel_command(self.packer, 0, 0, pcm_cancel_cmd, True, False, lead, CS.acc_type, False, self.distance_button, reverse_acc))
+          can_sends.append(toyotacan.create_accel_command(self.packer, 0, 0, pcm_cancel_cmd, True, False, self.lead or CS.out.vEgo < 12., CS.acc_type, False, self.distance_button, reverse_acc))
 
     # *** hud ui ***
     if self.CP.carFingerprint != CAR.TOYOTA_PRIUS_V:
