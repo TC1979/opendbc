@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 
 from openpilot.common.params import Params
 from opendbc.can.can_define import CANDefine
@@ -6,7 +7,6 @@ from opendbc.can.parser import CANParser
 from opendbc.car import Bus, DT_CTRL, create_button_events, structs
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.common.filter_simple import FirstOrderFilter
-from opendbc.car.common.numpy_fast import mean
 from opendbc.car.interfaces import CarStateBase
 from opendbc.car.toyota.values import ToyotaFlags, CAR, DBC, STEER_THRESHOLD, NO_STOP_TIMER_CAR, \
                                                   TSS2_CAR, RADAR_ACC_CAR, EPS_SCALE, UNSUPPORTED_DSU_CAR
@@ -123,13 +123,17 @@ class CarState(CarStateBase):
       if self.CP.carFingerprint != CAR.TOYOTA_MIRAI:
         ret.engineRpm = cp.vl["ENGINE_RPM"]["RPM"]
 
+      if self.CP.flags & ToyotaFlags.HYBRID:
+        ret.gas = cp.vl["GAS_PEDAL_HYBRID"]["GAS_PEDAL"]
+        ret.brake = cp.vl["BRAKE"]["BRAKE_AMOUNT"]
+
     ret.wheelSpeeds = self.get_wheel_speeds(
       cp.vl["WHEEL_SPEEDS"]["WHEEL_SPEED_FL"],
       cp.vl["WHEEL_SPEEDS"]["WHEEL_SPEED_FR"],
       cp.vl["WHEEL_SPEEDS"]["WHEEL_SPEED_RL"],
       cp.vl["WHEEL_SPEEDS"]["WHEEL_SPEED_RR"],
     )
-    ret.vEgoRaw = mean([ret.wheelSpeeds.fl, ret.wheelSpeeds.fr, ret.wheelSpeeds.rl, ret.wheelSpeeds.rr])
+    ret.vEgoRaw = float(np.mean([ret.wheelSpeeds.fl, ret.wheelSpeeds.fr, ret.wheelSpeeds.rl, ret.wheelSpeeds.rr]))
     ret.vEgo, ret.aEgo = self.update_speed_kf(ret.vEgoRaw)
     if self.CP.carFingerprint == CAR.TOYOTA_PRIUS_V:
       ret.vEgoCluster = ret.vEgo * 1.08987654321
@@ -353,6 +357,10 @@ class CarState(CarStateBase):
       pt_messages.append(("VSC1S07", 20))
       if CP.carFingerprint not in [CAR.TOYOTA_MIRAI]:
         pt_messages.append(("ENGINE_RPM", 42))
+
+      if CP.flags & ToyotaFlags.HYBRID:
+        pt_messages.append(("BRAKE", 83))
+        pt_messages.append(("GAS_PEDAL_HYBRID", 33))
 
       pt_messages += [
         ("GEAR_PACKET", 1),

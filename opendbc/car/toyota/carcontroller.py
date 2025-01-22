@@ -1,9 +1,9 @@
 import math
+import numpy as np
 from opendbc.car import Bus, carlog, apply_meas_steer_torque_limits, apply_std_steer_angle_limits, common_fault_avoidance, \
                         make_tester_present_msg, rate_limit, structs, ACCELERATION_DUE_TO_GRAVITY, DT_CTRL
 from opendbc.car.can_definitions import CanData
 from opendbc.car.common.filter_simple import FirstOrderFilter
-from opendbc.car.common.numpy_fast import clip, interp
 from opendbc.car.common.pid import PIDController
 from opendbc.car.secoc import add_mac, build_sync_mac
 from opendbc.car.interfaces import CarControllerBase
@@ -24,6 +24,7 @@ VisualAlert = structs.CarControl.HUDControl.VisualAlert
 # the down limit roughly matches the rate of ACCEL_NET, reducing PCM compensation windup
 ACCEL_WINDUP_LIMIT = 4.0 * DT_CTRL * 3  # m/s^2 / frame
 ACCEL_WINDDOWN_LIMIT = -4.0 * DT_CTRL * 3  # m/s^2 / frame
+ACCEL_PID_UNWIND = 0.03 * DT_CTRL * 3  # m/s^2 / frame
 
 # LKA limits
 # EPS faults if you apply torque while the steering rate is above 100 deg/s for too long
@@ -230,7 +231,7 @@ class CarController(CarControllerBase):
         if not lat_active:
           apply_angle = CS.out.steeringAngleDeg + CS.out.steeringAngleOffsetDeg
 
-        self.last_angle = clip(apply_angle, -MAX_LTA_ANGLE, MAX_LTA_ANGLE)
+        self.last_angle = float(np.clip(apply_angle, -MAX_LTA_ANGLE, MAX_LTA_ANGLE))
 
     self.last_steer = apply_steer
 
@@ -320,7 +321,7 @@ class CarController(CarControllerBase):
         if self.ToyotaTune:
           self.permit_braking = True
           # Set thresholds for compensatory force calculations
-          comp_thresh = interp(CS.out.vEgo, COMPENSATORY_CALCULATION_THRESHOLD_BP, COMPENSATORY_CALCULATION_THRESHOLD_V)
+          comp_thresh = np.interp(CS.out.vEgo, COMPENSATORY_CALCULATION_THRESHOLD_BP, COMPENSATORY_CALCULATION_THRESHOLD_V)
           if not CC.longActive:
             self.prohibit_neg_calculation = True
           if CS.pcm_accel_net > comp_thresh:
@@ -328,7 +329,7 @@ class CarController(CarControllerBase):
           # Calculate acceleration offset only when allowed
           self.pcm_accel_compensation = CS.pcm_accel_net if CC.longActive and not self.prohibit_neg_calculation else 0.0
           # Compute PCM acceleration command only if long control is active
-          pcm_accel_cmd = clip(actuators.accel + self.pcm_accel_compensation, self.params.ACCEL_MIN, self.params.ACCEL_MAX) if CC.longActive and not \
+          pcm_accel_cmd = float(np.clip(actuators.accel + self.pcm_accel_compensation, self.params.ACCEL_MIN, self.params.ACCEL_MAX)) if CC.longActive and not \
              CS.out.cruiseState.standstill else 0.0
         else:
           # internal PCM gas command can get stuck unwinding from negative accel so we apply a generous rate limit
@@ -344,7 +345,7 @@ class CarController(CarControllerBase):
 
           # GVC does not overshoot ego acceleration when starting from stop, but still has a similar delay
           if not self.CP.flags & ToyotaFlags.SECOC.value:
-            a_ego_blended = interp(CS.out.vEgo, [1.0, 2.0], [CS.gvc, CS.out.aEgo])
+            a_ego_blended = np.interp(CS.out.vEgo, [1.0, 2.0], [CS.gvc, CS.out.aEgo])
           else:
             a_ego_blended = CS.out.aEgo
 
@@ -355,6 +356,9 @@ class CarController(CarControllerBase):
           a_ego_future = a_ego_blended + j_ego * 0.5
 
           if actuators.longControlState == LongCtrlState.pid:
+            # constantly slowly unwind integral to recover from large temporary errors
+            self.long_pid.i -= ACCEL_PID_UNWIND * float(np.sign(self.long_pid.i))
+
             error_future = pcm_accel_cmd - a_ego_future
             pcm_accel_cmd = self.long_pid.update(error_future,
                                                speed=CS.out.vEgo,
@@ -370,7 +374,7 @@ class CarController(CarControllerBase):
           elif net_acceleration_request_min > 0.3:
             self.permit_braking = False
 
-          pcm_accel_cmd = clip(pcm_accel_cmd, self.params.ACCEL_MIN, self.params.ACCEL_MAX)
+          pcm_accel_cmd = float(np.clip(pcm_accel_cmd, self.params.ACCEL_MIN, self.params.ACCEL_MAX))
 
         can_sends.append(toyotacan.create_accel_command(self.packer, pcm_accel_cmd, actuators.accel, pcm_cancel_cmd, self.permit_braking, self.standstill_req, self.lead or CS.out.vEgo < 12.,
                                                         CS.acc_type, fcw_alert, self.distance_button, reverse_acc))
@@ -418,7 +422,7 @@ class CarController(CarControllerBase):
     new_actuators = actuators.as_builder()
     new_actuators.steer = apply_steer / self.params.STEER_MAX
     new_actuators.steerOutputCan = apply_steer
-    new_actuators.steeringAngleDeg = self.last_angle
+    new_actuators.steeringAngleDeg = float(self.last_angle)
     new_actuators.accel = self.accel
 
     self.frame += 1
