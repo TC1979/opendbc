@@ -123,7 +123,7 @@ class CarState(CarStateBase):
       if self.CP.carFingerprint != CAR.TOYOTA_MIRAI:
         ret.engineRpm = cp.vl["ENGINE_RPM"]["RPM"]
 
-      if self.CP.flags & ToyotaFlags.HYBRID:
+      if self.CP.flags & ToyotaFlags.HYBRID and not self.CP.carFingerprint == CAR.TOYOTA_PRIUS_V:
         ret.gas = cp.vl["GAS_PEDAL_HYBRID"]["GAS_PEDAL"]
         ret.brake = cp.vl["BRAKE"]["BRAKE_AMOUNT"]
 
@@ -358,7 +358,7 @@ class CarState(CarStateBase):
       if CP.carFingerprint not in [CAR.TOYOTA_MIRAI]:
         pt_messages.append(("ENGINE_RPM", 42))
 
-      if CP.flags & ToyotaFlags.HYBRID:
+      if CP.flags & ToyotaFlags.HYBRID and not CP.carFingerprint == CAR.TOYOTA_PRIUS_V:
         pt_messages.append(("BRAKE", 83))
         pt_messages.append(("GAS_PEDAL_HYBRID", 33))
 
