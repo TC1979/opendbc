@@ -262,7 +262,7 @@ class CarState(CarStateBase):
       self.short_press_button_counter = 0
     self.ispressed_prev = self.distance_button
 
-    ret.steeringWheelCar = True if self.CP.carName == "toyota" else False
+    ret.steeringWheelCar = True if self.CP.brand == "toyota" else False
 
     # Automatic BrakeHold
     if self.params.get_bool('AleSato_AutomaticBrakeHold') and self.CP.carFingerprint in TSS2_CAR and not (self.CP.flags & ToyotaFlags.HYBRID.value):
