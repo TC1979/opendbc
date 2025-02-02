@@ -43,8 +43,11 @@ MAX_LTA_DRIVER_TORQUE_ALLOWANCE = 150  # slightly above steering pressed allows 
 COMPENSATORY_CALCULATION_THRESHOLD_V = [-0.2, -0.2, -0.05]  # m/s^2
 COMPENSATORY_CALCULATION_THRESHOLD_BP = [0., 20., 32.]  # m/s
 
-# resume, lead, and lane lines hysteresis
+# lead and lane lines hysteresis
 UI_HYSTERESIS_TIME = 1.  # seconds
+
+# resume hysteresis
+RESUME_HYSTERESIS_TIME = 3.  # seconds
 
 GearShifter = structs.CarState.GearShifter
 UNLOCK_CMD = b'\x40\x05\x30\x11\x00\x40\x00\x00'
@@ -68,14 +71,12 @@ def poll_blindspot_status(lr):
   return CanData(0x750, m, 0)
 
 def get_long_tune(CP, params):
-  kiBP = [0.]
-  if Params().get_bool("ToyotaTune"):
-    kiBP = [0., 5., 15]
-    kiV = [0.8, 2., 1.2]
-
+  if CP.carFingerprint in TSS2_CAR:
+    kiBP = [2., 5.]
+    kiV = [0.5, 0.25]
   else:
-    kiBP = [0.,  1.,   4.,   8.,    13.,   20.,  27.]
-    kiV = [0.32, 0.32, 0.25, 0.202, 0.199, 0.17, 0.10]
+    kiBP = [0., 5., 35.]
+    kiV = [3.6, 2.4, 1.5]
 
   return PIDController(0.0, (kiBP, kiV), k_f=1.0,
                        pos_limit=params.ACCEL_MAX, neg_limit=params.ACCEL_MIN,
@@ -91,6 +92,8 @@ class CarController(CarControllerBase):
     self.alert_active = False
     # self.last_standstill = False
     self.resume_off_frames = 0.
+    self.standstill_off_frames = 0.
+    self.long_active_frames = 0.
     self.standstill_req = False
     self.permit_braking = True
     self._standstill_req = False
@@ -275,19 +278,29 @@ class CarController(CarControllerBase):
     # *** gas and brake ***
 
     # *** standstill logic ***
+    # do not set standstill for 3 seconds after resuming, reset when re-entering standstill
+    if not CS.out.cruiseState.standstill:
+      self.standstill_off_frames += 1
+    else:
+      self.standstill_off_frames = 0
+    # do not immediately resume after enabling, wait 1 second
+    if CS.out.cruiseState.enabled:
+      self.long_active_frames += 1
+    else:
+      self.long_active_frames = 0
     # mimic stock behaviour, set standstill_req to False only when openpilot wants to resume
     if not CC.cruiseControl.resume:
         self.resume_off_frames += 1  # frame counter for hysteresis
-        # add a 1.5 second hysteresis to when CC.cruiseControl.resume turns off in order to prevent
+        # add a 3 second hysteresis to when CC.cruiseControl.resume turns off in order to prevent
         # vehicle's dash from blinking
-        if self.resume_off_frames >= UI_HYSTERESIS_TIME / DT_CTRL:
+        if self.resume_off_frames >= RESUME_HYSTERESIS_TIME / DT_CTRL:
             self._standstill_req = True
     else:
         self.resume_off_frames = 0
         self._standstill_req = False
     # ignore standstill on NO_STOP_TIMER_CAR
-    self.standstill_req = actuators.longControlState == LongCtrlState.stopping and self._standstill_req \
-                          and self.CP.carFingerprint not in NO_STOP_TIMER_CAR and not self.topsng
+    self.standstill_req = self.standstill_off_frames > RESUME_HYSTERESIS_TIME / DT_CTRL and actuators.longControlState == LongCtrlState.stopping and self._standstill_req \
+                          and self.CP.carFingerprint not in NO_STOP_TIMER_CAR and not self.topsng and not CS.out.brakePressed and self.long_active_frames > UI_HYSTERESIS_TIME / DT_CTRL
 
     # AleSato's Automatic Brake Hold
     if Params().get_bool("AleSato_AutomaticBrakeHold") and self.CP.carFingerprint in TSS2_CAR and not (self.CP.flags & ToyotaFlags.SECOC.value) and \
@@ -319,7 +332,6 @@ class CarController(CarControllerBase):
             self.distance_button = 0
 
         if self.ToyotaTune:
-          self.permit_braking = True
           # Set thresholds for compensatory force calculations
           comp_thresh = np.interp(CS.out.vEgo, COMPENSATORY_CALCULATION_THRESHOLD_BP, COMPENSATORY_CALCULATION_THRESHOLD_V)
           if not CC.longActive:
@@ -331,6 +343,10 @@ class CarController(CarControllerBase):
           # Compute PCM acceleration command only if long control is active
           pcm_accel_cmd = float(np.clip(actuators.accel + self.pcm_accel_compensation, self.params.ACCEL_MIN, self.params.ACCEL_MAX)) if CC.longActive and not \
              CS.out.cruiseState.standstill else 0.0
+          if actuators.accel < 0.2 or stopping:
+            self.permit_braking = True
+          elif actuators.accel > 0.3 or not CC.longActive:
+            self.permit_braking = False
         else:
           # internal PCM gas command can get stuck unwinding from negative accel so we apply a generous rate limit
           pcm_accel_cmd = actuators.accel
@@ -338,14 +354,15 @@ class CarController(CarControllerBase):
             pcm_accel_cmd = rate_limit(pcm_accel_cmd, self.prev_accel, ACCEL_WINDDOWN_LIMIT, ACCEL_WINDUP_LIMIT)
           self.prev_accel = pcm_accel_cmd
 
-          # calculate amount of acceleration PCM should apply to reach target, given pitch
-          accel_due_to_pitch = math.sin(self.pitch.x) * ACCELERATION_DUE_TO_GRAVITY
+          # calculate amount of acceleration PCM should apply to reach target, given pitch.
+          # clipped to only include downhill angles, avoids erroneously unsetting PERMIT_BRAKING when stopping on uphills
+          accel_due_to_pitch = math.sin(min(self.pitch.x, 0.0)) * ACCELERATION_DUE_TO_GRAVITY
           # TODO: on uphills this sometimes sets PERMIT_BRAKING low not considering the creep force
           net_acceleration_request = pcm_accel_cmd + accel_due_to_pitch
 
           # GVC does not overshoot ego acceleration when starting from stop, but still has a similar delay
           if not self.CP.flags & ToyotaFlags.SECOC.value:
-            a_ego_blended = np.interp(CS.out.vEgo, [1.0, 2.0], [CS.gvc, CS.out.aEgo])
+            a_ego_blended = float(np.interp(CS.out.vEgo, [1.0, 2.0], [CS.gvc, CS.out.aEgo]))
           else:
             a_ego_blended = CS.out.aEgo
 
@@ -353,16 +370,19 @@ class CarController(CarControllerBase):
           prev_aego = self.aego.x
           self.aego.update(a_ego_blended)
           j_ego = (self.aego.x - prev_aego) / (DT_CTRL * 3)
-          a_ego_future = a_ego_blended + j_ego * 0.5
 
-          if actuators.longControlState == LongCtrlState.pid:
+          future_t = float(np.interp(CS.out.vEgo, [2., 5.], [0.25, 0.5]))
+          a_ego_future = a_ego_blended + j_ego * future_t
+
+          if CC.longActive:
             # constantly slowly unwind integral to recover from large temporary errors
             self.long_pid.i -= ACCEL_PID_UNWIND * float(np.sign(self.long_pid.i))
 
             error_future = pcm_accel_cmd - a_ego_future
             pcm_accel_cmd = self.long_pid.update(error_future,
                                                speed=CS.out.vEgo,
-                                               feedforward=pcm_accel_cmd)
+                                               feedforward=pcm_accel_cmd,
+                                               freeze_integrator=actuators.longControlState != LongCtrlState.pid)
           else:
             self.long_pid.reset()
 
@@ -423,7 +443,7 @@ class CarController(CarControllerBase):
     new_actuators = actuators.as_builder()
     new_actuators.steer = apply_steer / self.params.STEER_MAX
     new_actuators.steerOutputCan = apply_steer
-    new_actuators.steeringAngleDeg = float(self.last_angle)
+    new_actuators.steeringAngleDeg = self.last_angle
     new_actuators.accel = self.accel
 
     self.frame += 1
