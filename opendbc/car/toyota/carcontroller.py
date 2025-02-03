@@ -43,11 +43,8 @@ MAX_LTA_DRIVER_TORQUE_ALLOWANCE = 150  # slightly above steering pressed allows 
 COMPENSATORY_CALCULATION_THRESHOLD_V = [-0.2, -0.2, -0.05]  # m/s^2
 COMPENSATORY_CALCULATION_THRESHOLD_BP = [0., 20., 32.]  # m/s
 
-# lead and lane lines hysteresis
-UI_HYSTERESIS_TIME = 1.  # seconds
-
-# resume hysteresis
-RESUME_HYSTERESIS_TIME = 3.  # seconds
+# resume, lead, and lane lines hysteresis
+UI_HYSTERESIS_TIME = 3.  # seconds
 
 GearShifter = structs.CarState.GearShifter
 UNLOCK_CMD = b'\x40\x05\x30\x11\x00\x40\x00\x00'
@@ -96,8 +93,6 @@ class CarController(CarControllerBase):
     self.alert_active = False
     # self.last_standstill = False
     self.resume_off_frames = 0.
-    self.standstill_off_frames = 0.
-    self.long_active_frames = 0.
     self.standstill_req = False
     self.permit_braking = True
     self._standstill_req = False
@@ -282,29 +277,19 @@ class CarController(CarControllerBase):
     # *** gas and brake ***
 
     # *** standstill logic ***
-    # do not set standstill for 3 seconds after resuming, reset when re-entering standstill
-    if not CS.out.cruiseState.standstill:
-      self.standstill_off_frames += 1
-    else:
-      self.standstill_off_frames = 0
-    # do not immediately resume after enabling, wait 1 second
-    if CS.out.cruiseState.enabled:
-      self.long_active_frames += 1
-    else:
-      self.long_active_frames = 0
     # mimic stock behaviour, set standstill_req to False only when openpilot wants to resume
     if not CC.cruiseControl.resume:
         self.resume_off_frames += 1  # frame counter for hysteresis
-        # add a 3 second hysteresis to when CC.cruiseControl.resume turns off in order to prevent
+        # add a 1.5 second hysteresis to when CC.cruiseControl.resume turns off in order to prevent
         # vehicle's dash from blinking
-        if self.resume_off_frames >= RESUME_HYSTERESIS_TIME / DT_CTRL:
+        if self.resume_off_frames >= UI_HYSTERESIS_TIME / DT_CTRL:
             self._standstill_req = True
     else:
         self.resume_off_frames = 0
         self._standstill_req = False
     # ignore standstill on NO_STOP_TIMER_CAR
-    self.standstill_req = self.standstill_off_frames > RESUME_HYSTERESIS_TIME / DT_CTRL and actuators.longControlState == LongCtrlState.stopping and self._standstill_req \
-                          and self.CP.carFingerprint not in NO_STOP_TIMER_CAR and not self.topsng and not CS.out.brakePressed and self.long_active_frames > UI_HYSTERESIS_TIME / DT_CTRL
+    self.standstill_req = actuators.longControlState == LongCtrlState.stopping and self._standstill_req \
+                          and self.CP.carFingerprint not in NO_STOP_TIMER_CAR and not self.topsng
 
     # AleSato's Automatic Brake Hold
     if Params().get_bool("AleSato_AutomaticBrakeHold") and self.CP.carFingerprint in TSS2_CAR and not (self.CP.flags & ToyotaFlags.SECOC.value) and \
@@ -347,10 +332,7 @@ class CarController(CarControllerBase):
           # Compute PCM acceleration command only if long control is active
           pcm_accel_cmd = float(np.clip(actuators.accel + self.pcm_accel_compensation, self.params.ACCEL_MIN, self.params.ACCEL_MAX)) if CC.longActive and not \
              CS.out.cruiseState.standstill else 0.0
-          if actuators.accel < 0.2 or stopping:
-            self.permit_braking = True
-          elif actuators.accel > 0.3 or not CC.longActive:
-            self.permit_braking = False
+          self.permit_braking = CC.longActive
         else:
           # internal PCM gas command can get stuck unwinding from negative accel so we apply a generous rate limit
           pcm_accel_cmd = actuators.accel
