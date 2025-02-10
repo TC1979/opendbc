@@ -66,8 +66,8 @@ def poll_blindspot_status(lr):
 
 def get_long_tune(CP, params):
   if Params().get_bool("ToyotaTune"):
-    kiBP = [0., 5., 15, 25]
-    kiV = [0.8, 2., 1., 1.2]
+    kiBP = [0., 25]
+    kiV = [0.8, 1.2]
 
   if CP.carFingerprint in TSS2_CAR:
     kiBP = [2., 5.]
