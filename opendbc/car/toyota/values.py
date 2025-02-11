@@ -50,7 +50,8 @@ class ToyotaPandaFlags(IntFlag):
   FLAG_TOYOTA_STOCK_LONGITUDINAL = (2 << 8)
   FLAG_TOYOTA_LTA = (4 << 8)
   FLAG_TOYOTA_SECOC = (8 << 8)
-
+  FLAG_TOYOTA_SDSU = (64 << 8)
+  FLAG_TOYOTA_UNSUPPORTED_DSU_CAR = (128 << 8)
 
 class ToyotaFlags(IntFlag):
   # Detected flags
