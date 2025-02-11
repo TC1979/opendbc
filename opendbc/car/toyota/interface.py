@@ -46,7 +46,7 @@ class CarInterface(CarInterfaceBase):
     # 0x2AA is sent by a similar device which intercepts the radar instead of DSU on NO_DSU_CARs
     if 0x2FF in fingerprint[0] or (0x2AA in fingerprint[0] and candidate in NO_DSU_CAR):
       ret.flags |= ToyotaFlags.SMART_DSU.value
-      ret.safetyConfigs[0].safetyParam |= Panda.FLAG_TOYOTA_SDSU
+      ret.safetyConfigs[0].safetyParam |= ToyotaPandaFlags.FLAG_TOYOTA_SDSU.value
 
     if 0x2AA in fingerprint[0] and candidate in NO_DSU_CAR:
       ret.flags |= ToyotaFlags.RADAR_CAN_FILTER.value
@@ -147,7 +147,7 @@ class CarInterface(CarInterfaceBase):
       ret.safetyConfigs[0].safetyParam |= ToyotaPandaFlags.FLAG_TOYOTA_STOCK_LONGITUDINAL.value
 
     if candidate in UNSUPPORTED_DSU_CAR:
-      ret.safetyConfigs[0].safetyParam |= Panda.FLAG_TOYOTA_UNSUPPORTED_DSU_CAR
+      ret.safetyConfigs[0].safetyParam |= ToyotaPandaFlags.FLAG_TOYOTA_UNSUPPORTED_DSU_CAR.value
 
     # min speed to enable ACC. if car can do stop and go, then set enabling speed
     # to a negative value, so it won't matter.
