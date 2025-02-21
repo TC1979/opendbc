@@ -95,6 +95,7 @@ class CarController(CarControllerBase):
     # self.last_standstill = False
     self.resume_off_frames = 0.
     self.standstill_req = False
+    self.stop_timer = 0.
     self.permit_braking = True
     self._standstill_req = False
     self.lead = False
@@ -288,9 +289,13 @@ class CarController(CarControllerBase):
     else:
         self.resume_off_frames = 0
         self._standstill_req = False
+    if CS.out.vEgo < 1e-3:
+      self.stop_timer += 1
+    else:
+      self.stop_timer = 0
     # ignore standstill on NO_STOP_TIMER_CAR
     self.standstill_req = actuators.longControlState == LongCtrlState.stopping and self._standstill_req \
-                          and self.CP.carFingerprint not in NO_STOP_TIMER_CAR and not self.topsng
+                          and self.CP.carFingerprint not in NO_STOP_TIMER_CAR and not self.topsng and self.stop_timer > 0.5 / DT_CTRL
 
     # AleSato's Automatic Brake Hold
     if Params().get_bool("AleSato_AutomaticBrakeHold") and self.CP.carFingerprint in TSS2_CAR and not (self.CP.flags & ToyotaFlags.SECOC.value) and \
