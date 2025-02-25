@@ -166,7 +166,7 @@ static void toyota_rx_hook(const CANPacket_t *to_push) {
 }
 
 static bool toyota_tx_hook(const CANPacket_t *to_send) {
-  bool sport_mode = alternative_experience & ALT_EXP_RAISE_LONGITUDINAL_LIMITS_TO_ISO_MAX;
+  bool sport_mode = (alternative_experience & ALT_EXP_RAISE_LONGITUDINAL_LIMITS_TO_ISO_MAX) != 0;
 
   const SteeringLimits TOYOTA_STEERING_LIMITS = {
     .max_steer = 1500,
