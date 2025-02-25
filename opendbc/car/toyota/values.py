@@ -46,12 +46,13 @@ class CarControllerParams:
 
 class ToyotaSafetyFlags(IntFlag):
   # first byte is for EPS scaling factor
-  FLAG_TOYOTA_ALT_BRAKE = (1 << 8)
-  FLAG_TOYOTA_STOCK_LONGITUDINAL = (2 << 8)
-  FLAG_TOYOTA_LTA = (4 << 8)
-  FLAG_TOYOTA_SECOC = (8 << 8)
-  FLAG_TOYOTA_SDSU = (64 << 8)
-  FLAG_TOYOTA_UNSUPPORTED_DSU_CAR = (128 << 8)
+  ALT_BRAKE = (1 << 8)
+  STOCK_LONGITUDINAL = (2 << 8)
+  LTA = (4 << 8)
+  SECOC = (8 << 8)
+  SDSU = (64 << 8)
+  UNSUPPORTED_DSU_CAR = (128 << 8)
+
 
 class ToyotaFlags(IntFlag):
   # Detected flags
