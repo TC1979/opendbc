@@ -77,8 +77,8 @@ def get_long_tune(CP, params):
     kiBP = [2., 5.]
     kiV = [0.5, 0.25]
   else:
-    kiBP = [0.,   0.5,  11.,   13.,   20.,   27.,   40]
-    kiV = [0.324, 0.33, 0.205, 0.205, 0.174, 0.098, 0.09]
+    kiBP = [0.,  5.,   12.,   20.,   27.,   40.]
+    kiV = [0.35, 0.24, 0.201, 0.174, 0.098, 0.09]
 
   return PIDController(0.0, (kiBP, kiV), k_f=1.0,
                        pos_limit=params.ACCEL_MAX, neg_limit=params.ACCEL_MIN,
