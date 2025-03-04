@@ -29,6 +29,11 @@ class CarControllerParams:
   ANGLE_RATE_LIMIT_UP = AngleRateLimit(speed_bp=[5, 25], angle_v=[0.3, 0.15])
   ANGLE_RATE_LIMIT_DOWN = AngleRateLimit(speed_bp=[5, 25], angle_v=[0.36, 0.26])
 
+  # LTA limits
+  # EPS ignores commands above this angle and causes PCS to fault
+  STEER_ANGLE_MAX = 94.9461  # deg
+  MAX_LTA_DRIVER_TORQUE_ALLOWANCE = 150  # slightly above steering pressed allows some resistance when changing lanes
+
   def __init__(self, CP):
     if Params().get_bool("Dynamic_Follow"):
       self.ACCEL_MAX = 3.0
