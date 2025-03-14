@@ -92,13 +92,13 @@ jobs:
   mutation:
     name: Safety mutation tests
     runs-on: ${{ github.repository == 'commaai/opendbc' && 'namespace-profile-amd64-8x16' || 'ubuntu-latest' }}
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # need master to get diff
       - name: Run mutation tests
-        timeout-minutes: 25
+        timeout-minutes: 10
         run: |
           source setup.sh
           scons -j8
