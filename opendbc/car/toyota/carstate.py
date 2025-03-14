@@ -9,7 +9,8 @@ from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.common.filter_simple import FirstOrderFilter
 from opendbc.car.interfaces import CarStateBase
 from opendbc.car.toyota.values import ToyotaFlags, CAR, DBC, STEER_THRESHOLD, NO_STOP_TIMER_CAR, \
-                                                  TSS2_CAR, RADAR_ACC_CAR, EPS_SCALE, UNSUPPORTED_DSU_CAR
+                                                  TSS2_CAR, RADAR_ACC_CAR, EPS_SCALE, UNSUPPORTED_DSU_CAR, \
+                                                  SECOC_CAR
 
 ButtonType = structs.CarState.ButtonEvent.Type
 SteerControlType = structs.CarParams.SteerControlType
@@ -60,7 +61,6 @@ class CarState(CarStateBase):
     self.experimental_mode_via_wheel = self.CP.experimentalModeViaWheel
     # Change between chill/experimental mode using steering wheel
     self.ispressed_prev = False
-    self.distance_button_hold = 0
     self.gap_button_counter = 0
     self.short_press_button_counter = 0
 
@@ -232,32 +232,34 @@ class CarState(CarStateBase):
 
     if self.CP.carFingerprint in (TSS2_CAR - RADAR_ACC_CAR) or (self.CP.flags & ToyotaFlags.SMART_DSU and not self.CP.flags & ToyotaFlags.RADAR_CAN_FILTER):
       # distance button is wired to the ACC module (camera or radar)
-      # prev_distance_button = self.distance_button
-      prev_distance_button = self.distance_button_hold
-      if self.CP.carFingerprint in (TSS2_CAR - RADAR_ACC_CAR):
-        self.distance_button = cp_acc.vl["ACC_CONTROL"]["DISTANCE"]
+      prev_distance_button = self.distance_button
+      if (self.CP.carFingerprint in SECOC_CAR) and (self.CP.carFingerprint not in RADAR_ACC_CAR):
+        self.customized_distance_button = cp.vl["PCM_CRUISE_4"]["DISTANCE"]
+      elif self.CP.carFingerprint in (TSS2_CAR - RADAR_ACC_CAR):
+        self.customized_distance_button = cp_acc.vl["ACC_CONTROL"]["DISTANCE"]
       else:
-        self.distance_button = cp.vl["SDSU"]["FD_BUTTON"]
+        self.customized_distance_button = cp.vl["SDSU"]["FD_BUTTON"]
 
       ret.buttonEvents = create_button_events(self.distance_button, prev_distance_button, {1: ButtonType.gapAdjustCruise})
 
-    # change experimental/chill mode on fly with long press
-    if self.distance_button:
-      self.short_press_button_counter += 1
-      if not self.distance_button_hold:
-        self.gap_button_counter += 1
-        if self.gap_button_counter > 150:
-          self.params.put_bool_nonblocking('ExperimentalMode', not self.params.get_bool("ExperimentalMode"))
-          self.gap_button_counter = 0
+      # change experimental/chill mode on fly with long press
+      if self.customized_distance_button:
+        self.short_press_button_counter += 1
+        if not self.distance_button:
+          self.gap_button_counter += 1
+          if self.gap_button_counter < 150:
+            self.gap_button_counter = 0
+            self.distance_button = True
+      else:
+        self.gap_button_counter = 0
+        self.distance_button = False
 
-    if not self.distance_button and self.ispressed_prev and self.short_press_button_counter < 50:
-      self.distance_button_hold = True
-
-    if not self.ispressed_prev and not self.distance_button:
-      self.distance_button_hold = False
-      self.short_press_button_counter = 0
-    self.ispressed_prev = self.distance_button
-
+      # change experimental/chill mode on fly with short press
+      if not self.customized_distance_button and self.ispressed_prev and self.short_press_button_counter > 150:
+        self.params.put_bool_nonblocking('ExperimentalMode', not self.params.get_bool("ExperimentalMode"))
+      if not self.ispressed_prev and not self.customized_distance_button:
+        self.short_press_button_counter = 0
+      self.ispressed_prev = self.customized_distance_button
     ret.steeringWheelCar = True if self.CP.brand == "toyota" else False
 
     # Automatic BrakeHold

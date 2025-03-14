@@ -4,13 +4,12 @@
 
 // Stock longitudinal
 #define TOYOTA_BASE_TX_MSGS \
-  {0x191, 0, 8, false}, {0x412, 0, 8, false}, {0x1D2, 0, 8, false},  /* LKAS + LTA + PCM cancel cmd */  \
+  {0x191, 0, 8, false}, {0x412, 0, 8, false}, {0x1D2, 0, 8, false}, {0x750, 0, 8, false},  /* white list 0x750 for Enhanced Diagnostic Request */  \
 
 #define TOYOTA_COMMON_TX_MSGS \
   TOYOTA_BASE_TX_MSGS \
   {0x2E4, 0, 5, true}, \
   {0x343, 0, 8, false},  /* ACC cancel cmd */  \
-  {0x750, 0, 8, false},  /* white list 0x750 for Enhanced Diagnostic Request */  \
 
 #define TOYOTA_COMMON_SECOC_TX_MSGS \
   TOYOTA_BASE_TX_MSGS \
