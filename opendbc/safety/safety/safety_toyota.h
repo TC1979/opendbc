@@ -54,6 +54,7 @@ static bool toyota_lta = false;
 static int toyota_dbc_eps_torque_factor = 100;   // conversion factor for STEER_TORQUE_EPS in %: see dbc file
 
 static bool toyota_unsupported_dsu_car = false;
+static bool toyota_sdsu = false;
 
 static uint32_t toyota_compute_checksum(const CANPacket_t *to_push) {
   int addr = GET_ADDR(to_push);
@@ -395,6 +396,7 @@ static safety_config toyota_init(uint16_t param) {
   const uint32_t TOYOTA_PARAM_STOCK_LONGITUDINAL = 2UL << TOYOTA_PARAM_OFFSET;
   const uint32_t TOYOTA_PARAM_LTA = 4UL << TOYOTA_PARAM_OFFSET;
 
+  const uint32_t TOYOTA_PARAM_SDSU = 64UL << TOYOTA_PARAM_OFFSET;
   const uint32_t TOYOTA_PARAM_UNSUPPORTED_DSU_CAR = 128UL << TOYOTA_PARAM_OFFSET;
 
 #ifdef ALLOW_DEBUG
@@ -407,6 +409,7 @@ static safety_config toyota_init(uint16_t param) {
   toyota_lta = GET_FLAG(param, TOYOTA_PARAM_LTA);
   toyota_dbc_eps_torque_factor = param & TOYOTA_EPS_FACTOR;
   toyota_unsupported_dsu_car = GET_FLAG(param, TOYOTA_PARAM_UNSUPPORTED_DSU_CAR);
+  toyota_sdsu = GET_FLAG(param, TOYOTA_PARAM_SDSU);
 
   safety_config ret;
   if (toyota_stock_longitudinal) {
