@@ -169,9 +169,9 @@ class CarInterface(CarInterfaceBase):
       ret.stopAccel = -0.4
       ret.flags |= ToyotaFlags.RAISED_ACCEL_LIMIT.value
       if Params().get_bool("ToyotaTune"):
-        ret.stoppingDecelRate = 0.1    # reach stopping target smoothly
+        ret.stoppingDecelRate = 0.15   # reach stopping target smoothly
       else:
-        ret.stoppingDecelRate = 0.01  # reach stopping target smoothly
+        ret.stoppingDecelRate = 0.05  # reach stopping target smoothly
 
     # Hybrids have much quicker longitudinal actuator response
     if ret.flags & ToyotaFlags.HYBRID.value:
