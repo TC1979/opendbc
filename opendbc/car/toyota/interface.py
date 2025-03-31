@@ -161,7 +161,7 @@ class CarInterface(CarInterfaceBase):
     ret.minEnableSpeed = -1. if stop_and_go else MIN_ACC_SPEED
 
     ret.stopAccel = -2.5
-    ret.stoppingDecelRate = 0.3  # reach stopping target smoothly
+    ret.stoppingDecelRate = 0.25  # reach stopping target smoothly
 
     if candidate in TSS2_CAR:
       ret.vEgoStopping = 0.25
