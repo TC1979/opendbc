@@ -161,14 +161,15 @@ class CarInterface(CarInterfaceBase):
     ret.minEnableSpeed = -1. if stop_and_go else MIN_ACC_SPEED
 
     ret.stopAccel = -2.5
-    ret.vEgoStopping = 0.25
-    ret.vEgoStarting = 0.22
     ret.stoppingDecelRate = 0.3  # reach stopping target smoothly
 
     if candidate in TSS2_CAR:
-      ret.stopAccel = -0.4
+      ret.vEgoStopping = 0.25
+      ret.vEgoStarting = 0.22
+
       ret.flags |= ToyotaFlags.RAISED_ACCEL_LIMIT.value
       if Params().get_bool("ToyotaTune"):
+        ret.stopAccel = -0.4
         ret.stoppingDecelRate = 0.15   # reach stopping target smoothly
       else:
         ret.stoppingDecelRate = 0.05  # reach stopping target smoothly
